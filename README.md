@@ -6,12 +6,16 @@
 > This tool is strictly for **AUTHORIZED testing on systems you own or have explicit permission to test**.  
 > Focus is on discovery and responsible reporting. Do **not** use for unauthorized or malicious purposes.
 
-## Features (Current Foundation)
+## Current Features
 
-- Smart mutation-based fuzzer engine (Python)
-- Real-time crash monitoring via `dmesg` / `journalctl`
-- Crash saving with metadata
-- Basic sandbox support (`os.setsid` + process group kill)
+- Smart mutation-based fuzzer engine
+- Real-time crash monitoring (`dmesg` / `journalctl`)
+- **Crash Triage System** → Automatically classifies crashes as:
+  - `Exploitable (High Risk)`
+  - `Potentially Exploitable`
+  - `Non-Exploitable (Low Risk)`
+- Basic coverage tracking (unique crash signatures + interesting inputs)
+- Process Manager with resource limits (CPU / Memory) + process-group sandbox
 - Intentionally vulnerable test target included
 
 ## Project Structure
@@ -20,9 +24,12 @@
 Zero-Hunter-Engine/
 ├── core/
 │   ├── fuzzer_engine.py      # Main fuzzing engine
+│   ├── triage.py             # Crash classification (NEW)
+│   ├── coverage.py           # Coverage guidance skeleton (NEW)
 │   └── __init__.py
 ├── utils/
 │   ├── crash_monitor.py      # Log-based crash detector
+│   ├── process_manager.py    # Sandbox + resource limits (NEW)
 │   ├── logger.py
 │   └── __init__.py
 ├── targets/
@@ -36,11 +43,9 @@ Zero-Hunter-Engine/
 ## Quick Start (Safe Testing)
 
 ```bash
-# Clone
 git clone https://github.com/sayan9168/Zero-Hunter-Engine.git
 cd Zero-Hunter-Engine
 
-# Install dependencies
 pip install -r requirements.txt
 
 # Build the vulnerable test target
@@ -48,8 +53,17 @@ cd targets/vulnerable_test
 make
 cd ../..
 
-# Run fuzzer against the test target (ASAN recommended)
+# Run fuzzer (ASAN version recommended)
 python3 main.py
+```
+
+### Expected Output Example
+```text
+[*] Zero-Hunter-Engine started on: ./targets/vulnerable_test/vuln_asan
+[*] Sandbox: True | Triage: True | Coverage: True
+[CRASH] Saved → crashes/crash_00000_....bin
+[TRIAGE] crash_00000_... → Exploitable (High Risk) (confidence: 90%)
+         Reason : AddressSanitizer / KASAN report detected
 ```
 
 ## Ethical Guidelines
@@ -61,10 +75,12 @@ python3 main.py
 
 ## Roadmap
 
-- [ ] Crash triage (Exploitable vs Non-Exploitable)
-- [ ] Coverage-guided fuzzing support
+- [x] Crash Triage System
+- [x] Process Manager + Resource Limits
+- [x] Coverage tracking skeleton
+- [ ] Real instrumentation-based coverage (SanitizerCoverage / AFL-style)
 - [ ] Network protocol support
-- [ ] Stronger sandbox (namespaces + seccomp)
+- [ ] Stronger sandbox (Linux namespaces + seccomp-bpf)
 - [ ] C++ high-performance mutator extension
 
 ## License

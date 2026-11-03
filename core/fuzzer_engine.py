@@ -9,14 +9,16 @@ import sys
 import time
 import random
 import signal
-import subprocess
 from pathlib import Path
 from typing import Dict, Any, List
 from dataclasses import dataclass
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from utils.crash_monitor import CrashMonitor
+from utils.process_manager import ProcessManager, ProcessLimits
 from utils.logger import setup_logger
+from core.triage import CrashTriage, RiskLevel
+from core.coverage import CoverageTracker
 
 logger = setup_logger("fuzzer_engine")
 
@@ -31,12 +33,17 @@ class FuzzConfig:
     mutation_rate: float = 0.18
     sandbox: bool = True
     monitor_logs: bool = True
+    enable_triage: bool = True
+    enable_coverage: bool = True
 
 
 class FuzzerEngine:
     def __init__(self, config: FuzzConfig):
         self.config = config
         self.monitor = CrashMonitor() if config.monitor_logs else None
+        self.process_mgr = ProcessManager(ProcessLimits(cpu_seconds=3, memory_mb=128))
+        self.triage = CrashTriage() if config.enable_triage else None
+        self.coverage = CoverageTracker() if config.enable_coverage else None
         self.crash_count = 0
         self.iteration = 0
         Path(config.output_dir).mkdir(parents=True, exist_ok=True)
@@ -104,36 +111,20 @@ class FuzzerEngine:
                 tmp = Path(self.config.output_dir) / f"input_{self.iteration}.bin"
                 tmp.write_bytes(payload)
                 cmd = [self.config.target, str(tmp)]
-                proc = subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    preexec_fn=os.setsid if self.config.sandbox else None,
+                exec_result = self.process_mgr.spawn(
+                    cmd=cmd,
+                    timeout=self.config.timeout,
+                    sandbox=self.config.sandbox,
                 )
             else:  # stdin
-                proc = subprocess.Popen(
-                    [self.config.target],
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    preexec_fn=os.setsid if self.config.sandbox else None,
+                exec_result = self.process_mgr.spawn(
+                    cmd=[self.config.target],
+                    stdin_data=payload,
+                    timeout=self.config.timeout,
+                    sandbox=self.config.sandbox,
                 )
-                proc.stdin.write(payload)
-                proc.stdin.close()
 
-            try:
-                stdout, stderr = proc.communicate(timeout=self.config.timeout)
-                result["returncode"] = proc.returncode
-                result["stdout"] = stdout
-                result["stderr"] = stderr
-            except subprocess.TimeoutExpired:
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-                result["returncode"] = -9
-                result["signal"] = "TIMEOUT"
-
-            if result["returncode"] is not None and result["returncode"] < 0:
-                result["crashed"] = True
-                result["signal"] = -result["returncode"]
+            result.update(exec_result)
 
         except Exception as e:
             logger.error(f"Execution failed: {e}")
@@ -141,18 +132,30 @@ class FuzzerEngine:
 
         return result
 
-    def save_crash(self, payload: bytes, meta: Dict[str, Any]):
+    def save_crash(self, payload: bytes, meta: Dict[str, Any], triage_result=None):
         crash_id = f"crash_{self.crash_count:05d}_{int(time.time())}"
         crash_file = Path(self.config.output_dir) / f"{crash_id}.bin"
         meta_file = Path(self.config.output_dir) / f"{crash_id}.meta"
+
         crash_file.write_bytes(payload)
-        meta_file.write_text(str(meta))
+
+        meta_content = str(meta)
+        if triage_result:
+            meta_content += f"\n\n[TRIAGE]\nRisk: {triage_result.risk.value}\n"
+            meta_content += f"Confidence: {triage_result.confidence:.0%}\n"
+            meta_content += f"Reason: {triage_result.reason}\n"
+            meta_content += f"Notes: {triage_result.notes}\n"
+
+        meta_file.write_text(meta_content)
         logger.warning(f"[CRASH] Saved → {crash_file}")
         self.crash_count += 1
 
+        if self.triage and triage_result:
+            self.triage.print_report(triage_result, crash_id)
+
     def run(self):
         logger.info(f"[*] Zero-Hunter-Engine started on: {self.config.target}")
-        logger.info(f"[*] Sandbox: {self.config.sandbox} | Log Monitor: {self.config.monitor_logs}")
+        logger.info(f"[*] Sandbox: {self.config.sandbox} | Triage: {self.config.enable_triage} | Coverage: {self.config.enable_coverage}")
         seeds = self.load_seeds()
 
         if self.monitor:
@@ -160,25 +163,49 @@ class FuzzerEngine:
 
         try:
             while self.iteration < self.config.max_iterations:
-                seed = random.choice(seeds)
+                # Prefer interesting seeds if coverage tracking is enabled
+                if self.coverage and self.coverage.interesting_inputs and random.random() < 0.4:
+                    # Simple preference (future: real energy scheduling)
+                    seed = random.choice(seeds)
+                else:
+                    seed = random.choice(seeds)
+
                 payload = self.mutate(seed)
                 result = self.execute_target(payload)
 
                 if result["crashed"]:
-                    self.save_crash(payload, result)
-                    if self.monitor:
-                        self.monitor.check_for_new_crashes()
+                    # Coverage check
+                    is_new = True
+                    if self.coverage:
+                        is_new = self.coverage.is_new_crash(payload, result.get("signal"))
+                        if is_new:
+                            self.coverage.mark_interesting(payload)
+
+                    if is_new:
+                        triage_result = None
+                        if self.triage:
+                            log_crashes = self.monitor.check_for_new_crashes() if self.monitor else []
+                            log_lines = [c["raw"] for c in log_crashes]
+                            triage_result = self.triage.analyze(result, log_lines)
+
+                        self.save_crash(payload, result, triage_result)
 
                 self.iteration += 1
                 if self.iteration % 200 == 0:
-                    logger.info(f"[*] Iter: {self.iteration} | Crashes: {self.crash_count}")
+                    stats = f"Iter: {self.iteration} | Crashes: {self.crash_count}"
+                    if self.coverage:
+                        cov = self.coverage.get_stats()
+                        stats += f" | Unique: {cov['unique_crashes']} | Interesting: {cov['interesting_inputs']}"
+                    logger.info(f"[*] {stats}")
 
         except KeyboardInterrupt:
             logger.info("[*] Stopped by user")
         finally:
             if self.monitor:
                 self.monitor.stop()
-            logger.info(f"[*] Done. Total unique crashes: {self.crash_count}")
+            logger.info(f"[*] Done. Total crashes saved: {self.crash_count}")
+            if self.coverage:
+                logger.info(f"[*] Coverage stats: {self.coverage.get_stats()}")
 
 
 if __name__ == "__main__":
