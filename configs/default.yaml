@@ -1,0 +1,9 @@
+target: "./targets/vulnerable_test/vuln_asan"
+input_mode: "file"
+seed_dir: "seeds"
+output_dir: "crashes"
+timeout: 2.0
+max_iterations: 5000
+mutation_rate: 0.18
+sandbox: true
+monitor_logs: true
