@@ -1,0 +1,13 @@
+# Zero-Hunter-Engine Sample Fuzzing Dictionary (AFL compatible)
+hdr_zero="ZERO"
+hdr_zh26="ZH26"
+hdr_zhtp="ZHTP"
+cmd_ping="PING\r\n"
+cmd_auth="AUTH "
+kw_free="FREE"
+magic_dead="\xef\xbe\xad\xde"
+magic_1337="\xde\xc0\x37\x13"
+magic_null="\x00\x00\xd0\xba"
+fmt_str="%s%s%s%n"
+int_max="\xff\xff\xff\x7f"
+int_min="\x00\x00\x00\x80"

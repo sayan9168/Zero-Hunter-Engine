@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Zero-Hunter-Engine v3.0 Compiler Wrapper (zh-cc)
+# Compiles C/C++ targets with AddressSanitizer + UndefinedBehaviorSanitizer +
+# SanitizerCoverage (trace-pc + trace-cmp) + Persistent Forkserver runtime.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RT_OBJ="${SCRIPT_DIR}/sancov_rt.o"
+
+if [[ ! -f "${RT_OBJ}" ]]; then
+    make -s -C "${SCRIPT_DIR}" sancov_rt.o
+fi
+
+COMPILER="${ZH_CC:-gcc}"
+if [[ "${0}" == *"++"* ]]; then
+    COMPILER="${ZH_CXX:-g++}"
+fi
+
+SANITIZERS="address,undefined"
+if [[ "${ZH_NO_UBSAN:-0}" == "1" ]]; then
+    SANITIZERS="address"
+fi
+
+SAN_FLAGS=(
+    -g
+    -O1
+    -fno-omit-frame-pointer
+    "-fsanitize=${SANITIZERS}"
+    -fno-sanitize-recover=undefined
+    -fsanitize-coverage=trace-pc
+    -fsanitize-coverage=trace-cmp
+)
+
+if [[ "${ZH_NO_ASAN:-0}" == "1" ]]; then
+    SAN_FLAGS=(
+        -g
+        -O1
+        -fno-omit-frame-pointer
+        -fsanitize-coverage=trace-pc
+        -fsanitize-coverage=trace-cmp
+    )
+fi
+
+exec "${COMPILER}" "${SAN_FLAGS[@]}" "$@" "${RT_OBJ}"

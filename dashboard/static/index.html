@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Zero-Hunter-Engine v3.0 — Apex Mission Control</title>
+<style>
+  :root {
+    --bg: #070b13;
+    --panel: #0f1625;
+    --panel2: #152036;
+    --border: #223252;
+    --txt: #e6eef9;
+    --muted: #8ea1c0;
+    --cyan: #22d3ee;
+    --blue: #38bdf8;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --purple: #a78bfa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+    background: radial-gradient(circle at top right, #111d36 0%, var(--bg) 52%);
+    color: var(--txt);
+    min-height: 100vh;
+  }
+  header {
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
+    gap: 12px; padding: 16px 26px; background: rgba(15, 22, 37, 0.92);
+    border-bottom: 1px solid var(--border); backdrop-filter: blur(8px);
+    position: sticky; top: 0; z-index: 20;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--cyan), #6366f1);
+    display: grid; place-items: center; font-weight: 900; color: #04101d; font-size: 16px;
+  }
+  .brand h1 { margin: 0; font-size: 18px; letter-spacing: -0.01em; }
+  .brand small { color: var(--muted); font-size: 12px; display: block; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 700;
+    border: 1px solid var(--border); background: var(--panel2);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.live { background: var(--green); box-shadow: 0 0 10px var(--green); animation: pulse 1.1s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  main { max-width: 1400px; margin: 0 auto; padding: 20px 26px 48px; }
+
+  .ctrl-bar {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 15px 18px; margin-bottom: 18px;
+    display: flex; flex-wrap: wrap; align-items: flex-end; gap: 13px;
+  }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+  select, input[type="number"] {
+    background: #080d18; color: var(--txt); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 11px; font-size: 13px; outline: none;
+  }
+  select { min-width: 340px; }
+  input[type="number"] { width: 96px; }
+  .chk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 13px; padding-bottom: 6px; font-size: 12.5px; color: var(--muted); }
+  .chk-row label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .btn {
+    border: none; border-radius: 8px; padding: 9px 15px; font-size: 12.5px; font-weight: 700;
+    cursor: pointer; transition: transform .08s, opacity .15s; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary { background: linear-gradient(135deg, var(--cyan), #0284c7); color: #04111f; }
+  .btn-danger { background: rgba(239,68,68,.18); color: #fca5a5; border: 1px solid var(--red); }
+  .btn-ghost { background: var(--panel2); color: var(--txt); border: 1px solid var(--border); }
+
+  .progress-wrap { height: 5px; background: #0c1220; border-radius: 99px; overflow: hidden; margin-bottom: 18px; border: 1px solid #18233a; }
+  .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width .25s ease; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 11px; padding: 14px 16px; }
+  .kpi .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .kpi .val { font-size: 24px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .kpi .sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .c-cyan { color: var(--cyan); }
+  .c-green { color: var(--green); }
+  .c-amber { color: var(--amber); }
+  .c-red { color: var(--red); }
+  .c-purple { color: var(--purple); }
+
+  .grid-2 { display: grid; grid-template-columns: 1.35fr 1fr; gap: 18px; margin-bottom: 18px; }
+  @media (max-width: 980px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+  .card-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 14px; font-weight: 700; }
+  .card-title span.hint { font-size: 12px; color: var(--muted); font-weight: 400; }
+
+  .heatmap { display: grid; grid-template-columns: repeat(16, 1fr); gap: 5px; margin-bottom: 14px; }
+  .hm-cell { height: 21px; border-radius: 4px; background: #152136; border: 1px solid #1e2f4d; transition: background .2s; }
+
+  .caps-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 13px; }
+  .chip {
+    font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 600;
+    border: 1px solid var(--border); background: #0c1322; color: var(--muted);
+  }
+  .chip.on { border-color: rgba(16,185,129,.45); background: rgba(16,185,129,.12); color: #6ee7b7; }
+  .chip.off { border-color: rgba(245,158,11,.35); color: #fcd34d; }
+
+  .strat-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 12px; }
+  .strat-name { width: 112px; color: var(--muted); font-family: ui-monospace, monospace; }
+  .strat-bar-bg { flex: 1; height: 8px; background: #090f1c; border-radius: 99px; overflow: hidden; }
+  .strat-bar { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); border-radius: 99px; }
+  .strat-cnt { width: 64px; text-align: right; font-variant-numeric: tabular-nums; color: var(--txt); }
+
+  .split-bottom { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; margin-bottom: 18px; }
+  @media (max-width: 1024px) { .split-bottom { grid-template-columns: 1fr; } }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; padding: 8px 8px; border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; }
+  td { padding: 8px 8px; border-bottom: 1px solid #172238; vertical-align: middle; }
+  tr.crash-row { cursor: pointer; transition: background .12s; }
+  tr.crash-row:hover, tr.crash-row.active { background: rgba(34, 211, 238, 0.1); }
+
+  .badge { padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; display: inline-block; }
+  .b-HIGH { background: rgba(239,68,68,.2); color: #fca5a5; border: 1px solid var(--red); }
+  .b-MEDIUM { background: rgba(245,158,11,.2); color: #fcd34d; border: 1px solid var(--amber); }
+  .b-LOW { background: rgba(16,185,129,.2); color: #6ee7b7; border: 1px solid var(--green); }
+  .b-UNKNOWN { background: rgba(148,163,184,.2); color: #cbd5e1; }
+
+  pre {
+    background: #060a12; border: 1px solid #1b2842; border-radius: 8px;
+    padding: 10px 12px; font-size: 11.5px; color: #dbeafe; overflow-x: auto; margin: 6px 0 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .fix-box {
+    background: rgba(16,185,129,.08); border: 1px solid rgba(16,185,129,.35);
+    border-radius: 8px; padding: 10px 12px; margin: 8px 0 12px; font-size: 12.5px;
+  }
+  .empty { color: var(--muted); font-size: 13px; padding: 18px 4px; text-align: center; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--cyan); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo">ZH3</div>
+    <div>
+      <h1>Zero-Hunter-Engine <span style="color:var(--cyan);font-size:13px;">v3.0 Apex</span></h1>
+      <small>Forkserver Turbo • Hybrid SAST+DAST • MOpt PSO • Checksum/Grammar • Differential & SARIF</small>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <a class="btn btn-ghost" href="api/report/sarif" target="_blank" rel="noopener">⬇ Export SARIF v2.1.0</a>
+    <a class="btn btn-ghost" href="api/report/html" target="_blank" rel="noopener">Open HTML Report ↗</a>
+    <div class="status-pill">
+      <span id="statusDot" class="dot"></span>
+      <span id="statusText">IDLE</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="ctrl-bar">
+    <div class="field">
+      <label for="presetSel">Target / Vulnerability Research Mode</label>
+      <select id="presetSel">
+        <option value="vuln_vault">vuln_vault — CRC32-Guarded Container (UBSan IntOverflow + OOB Read + Overflow)</option>
+        <option value="vuln_maze">vuln_maze — Multi-Bug CmpLog & SanCov Benchmark (UAF + DoubleFree + Null)</option>
+        <option value="diff_quota">diff_test — Differential Logic Bypass (parser_ref vs parser_buggy Truncation)</option>
+        <option value="vuln_net">vuln_net — Loopback TCP Protocol Server (Managed Network Mode)</option>
+        <option value="vuln_asan">vuln_asan — Stack Buffer Overflow Target (ASan + UBSan + Forkserver)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="iterInp">Iterations</label>
+      <input id="iterInp" type="number" min="100" max="50000" step="100" value="1400" />
+    </div>
+    <div class="field">
+      <label for="workersInp">Workers</label>
+      <input id="workersInp" type="number" min="1" max="4" value="2" />
+    </div>
+    <div class="chk-row">
+      <label><input id="fsrvChk" type="checkbox" checked /> Forkserver Turbo</label>
+      <label><input id="sandboxChk" type="checkbox" checked /> Namespaces + seccomp</label>
+      <label><input id="minChk" type="checkbox" checked /> Auto-Minimize (tmin)</label>
+      <label><input id="dictChk" type="checkbox" checked /> SAST + CmpLog + CRC</label>
+    </div>
+    <div style="display:flex;gap:8px;margin-left:auto;">
+      <button class="btn btn-primary" onclick="startCampaign()">▶ Launch Campaign</button>
+      <button class="btn btn-danger" onclick="stopCampaign()">■ Stop</button>
+      <button class="btn btn-ghost" onclick="clearCrashes()">Clear</button>
+    </div>
+  </section>
+
+  <div class="progress-wrap"><div id="progFill" class="progress-fill"></div></div>
+
+  <section class="kpis">
+    <div class="kpi">
+      <div class="lbl">Executions</div>
+      <div id="kpiIter" class="val c-cyan">0</div>
+      <div id="kpiRate" class="sub">0.0 exec/sec</div>
+    </div>
+    <div class="kpi">
+      <div class="lbl">SanCov Edges</div>
+      <div id="kpiEdges" class="val c-purple">0</div>
+      <div id="kpiDensity" class="sub">64KB ASLR-invariant map</div>
+    </div>
+    <div class="kpi">
+      <div class="lbl">Dynamic Corpus</div>
+      <div id="kpiCorpus" class="val c-green">0</div>
+      <div id="kpiFavored" class="sub">0 favored • depth 0</div>
+    </div>
+    <div class="kpi">
+      <div class="lbl">SAST Hotspots</div>
+      <div id="kpiSast" class="val c-amber">0</div>
+      <div id="kpiChecksum" class="sub">checksum: auto</div>
+    </div>
+    <div class="kpi">
+      <div class="lbl">Unique Bugs Found</div>
+      <div id="kpiCrashes" class="val c-red">0</div>
+      <div id="kpiRawCrashes" class="sub">0 total hits (deduped)</div>
+    </div>
+  </section>
+
+  <section class="grid-2">
+    <div class="card">
+      <div class="card-title">
+        <span>64KB Edge Coverage Bitmap (64 Sectors) & Growth Curve</span>
+        <span id="targetModeHint" class="hint">mode: stdin</span>
+      </div>
+      <div id="heatmapGrid" class="heatmap"></div>
+      <svg id="covChart" viewBox="0 0 600 110" style="width:100%;height:110px;background:#080d18;border-radius:8px;border:1px solid #19253d;">
+        <polyline id="covLine" fill="none" stroke="#22d3ee" stroke-width="2.5" points="8,98 592,98" />
+      </svg>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span>Kernel Sandbox, Sanitizers & MOpt PSO Swarm Weights</span>
+        <span class="hint">Adaptive Operator Probabilities</span>
+      </div>
+      <div id="capsWrap" class="caps-wrap"></div>
+      <div id="psoWrap"></div>
+    </div>
+  </section>
+
+  <section class="split-bottom">
+    <div class="card">
+      <div class="card-title">
+        <span>Deduplicated Crash & Differential Logic Bug Queue</span>
+        <span class="hint">Click any row for source root-cause & patch</span>
+      </div>
+      <div id="crashTableWrap"></div>
+      <div id="diffTableWrap" style="margin-top:14px;"></div>
+
+      <div style="margin-top:18px;">
+        <div class="card-title">
+          <span>Top Favored Corpus Seeds (AFLFast Energy Queue)</span>
+          <span class="hint">Edge-cover culled</span>
+        </div>
+        <div id="corpusTableWrap"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span>Root-Cause Source Code, Patch Advisor & `tmin` Hex</span>
+        <span id="forensicId" class="hint">Select a finding</span>
+      </div>
+      <div id="forensicBody" class="empty">Select any discovered vulnerability on the left to inspect its exact C/C++ source code line, defensive remediation patch, ASan/UBSan call stack, and minimized reproducer bytes.</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-title">
+      <span>Hybrid SAST Source-Code Vulnerability & Hotspot Audit (`targets/`)</span>
+      <span id="sastSummaryHint" class="hint">Static pre-analysis feeding magic tokens & CRC hints</span>
+    </div>
+    <div id="sastTableWrap"></div>
+  </section>
+</main>
+
+<script>
+  let selectedCrashId = null;
+  let latestCrashes = [];
+  let latestDivs = [];
+
+  const hmEl = document.getElementById('heatmapGrid');
+  for (let i = 0; i < 64; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'hm-cell';
+    hmEl.appendChild(cell);
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function startCampaign() {
+    const body = {
+      preset: document.getElementById('presetSel').value,
+      max_iterations: Number(document.getElementById('iterInp').value || 1400),
+      workers: Number(document.getElementById('workersInp').value || 2),
+      use_forkserver: document.getElementById('fsrvChk').checked,
+      sandbox: document.getElementById('sandboxChk').checked,
+      auto_minimize: document.getElementById('minChk').checked,
+      use_dict: document.getElementById('dictChk').checked,
+    };
+    await fetch('api/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    pollStatus();
+  }
+
+  async function stopCampaign() {
+    await fetch('api/stop', { method: 'POST', body: '{}' });
+    pollStatus();
+  }
+
+  async function clearCrashes() {
+    await fetch('api/clear', { method: 'POST', body: '{}' });
+    selectedCrashId = null;
+    pollStatus();
+  }
+
+  function renderForensics(crash) {
+    const fId = document.getElementById('forensicId');
+    const fBody = document.getElementById('forensicBody');
+    if (!crash) {
+      fId.textContent = 'Select a finding';
+      fBody.className = 'empty';
+      fBody.innerHTML = 'No finding selected.';
+      return;
+    }
+
+    // Handle Differential Logic Bug object
+    if (crash.diff_id) {
+      fId.textContent = crash.diff_id;
+      fBody.className = '';
+      fBody.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <span class="badge b-HIGH">LOGIC DIVERGENCE (${esc(crash.category)})</span>
+          <span style="font-size:12px;color:var(--cyan);font-weight:700;">${esc(crash.cwe)}</span>
+        </div>
+        <div style="font-size:13px;margin-bottom:10px;">
+          Reference Output: <code>${esc(crash.ref_stdout)}</code> (rc=${crash.ref_rc}) &nbsp;≠&nbsp;
+          Candidate Output: <code style="color:#fca5a5;">${esc(crash.cand_stdout)}</code> (rc=${crash.cand_rc})
+        </div>
+        <div class="fix-box">
+          <strong style="color:#6ee7b7;">Defensive Remediation:</strong> Validate full 32/64-bit integer ranges before narrowing casts (<code>uint16_t</code> / <code>int16_t</code>) so high-bit payloads cannot bypass quota/authorization checks.
+        </div>
+        <div style="font-size:12px;font-weight:700;color:var(--muted);">MINIMIZED LOGIC-BYPASS INPUT (${crash.minimized_size} bytes)</div>
+        <pre>${esc(crash.hexdump || '')}</pre>
+      `;
+      return;
+    }
+
+    fId.textContent = crash.crash_id;
+    fBody.className = '';
+    const tr = crash.triage || {};
+    const rc = crash.root_cause || {};
+    const frames = (tr.stack_frames || []).map(f => `<div style="padding:2px 0;"><code>↳ ${esc(f)}</code></div>`).join('') || '<div><code>(No symbolized frames)</code></div>';
+
+    let srcHtml = '';
+    if (rc.context_lines && rc.context_lines.length) {
+      const codeStr = rc.context_lines.map(r => `${r.focus ? '>>>' : '   '} ${String(r.line).padStart(3, ' ')} | ${r.code}`).join('\n');
+      const shortFile = String(rc.source_file || '').split('/').slice(-2).join('/');
+      srcHtml = `
+        <div style="font-size:12px;font-weight:700;color:var(--amber);margin-top:6px;">
+          ROOT-CAUSE SOURCE LOCALIZATION (${esc(shortFile)}:${rc.line_number})
+        </div>
+        <pre>${esc(codeStr)}</pre>
+      `;
+    }
+
+    let fixHtml = '';
+    if (rc.remediation_summary) {
+      fixHtml = `
+        <div class="fix-box">
+          <strong style="color:#6ee7b7;">Defensive Patch Guidance:</strong> ${esc(rc.remediation_summary)}
+          ${rc.secure_code_example ? `<pre style="margin:6px 0 0;">${esc(rc.secure_code_example)}</pre>` : ''}
+        </div>
+      `;
+    }
+
+    const hexTitle = crash.min_hexdump
+      ? `MINIMIZED REPRODUCER (${crash.min_size}B from ${crash.raw_size}B)`
+      : `REPRODUCER PAYLOAD (${crash.raw_size || 0} bytes)`;
+
+    fBody.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <span class="badge b-${esc(tr.risk_key || 'UNKNOWN')}">${esc(tr.risk || 'Unknown')}</span>
+        <span style="font-size:12px;color:var(--cyan);font-weight:700;">${esc(tr.cwe || 'CWE-119')} • CVSS ~${Number(tr.cvss_estimate || 5).toFixed(1)}</span>
+      </div>
+      <div style="font-size:13px;margin-bottom:6px;"><strong>${esc(tr.reason || '')}</strong></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+        Strategy: <code>${esc(crash.strategy || 'havoc')}</code> &nbsp;|&nbsp;
+        Access: <code>${esc(tr.access_type || 'N/A')}</code> &nbsp;|&nbsp;
+        Hash: <code>${esc(tr.stack_hash || 'none')}</code>
+      </div>
+      ${srcHtml}
+      ${fixHtml}
+      <div style="font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:4px;">SYMBOLIZED CALL STACK</div>
+      <div style="background:#060a12;border:1px solid #1b2842;border-radius:8px;padding:8px 10px;margin-bottom:10px;">${frames}</div>
+      <div style="font-size:11.5px;font-weight:700;color:var(--muted);">${hexTitle}</div>
+      <pre>${esc(crash.min_hexdump || crash.hexdump || '')}</pre>
+    `;
+  }
+
+  function selectFinding(id) {
+    selectedCrashId = id;
+    const found = latestCrashes.find(c => c.crash_id === id) || latestDivs.find(d => d.diff_id === id);
+    renderForensics(found || null);
+    document.querySelectorAll('tr.crash-row').forEach(r => {
+      r.classList.toggle('active', r.dataset.cid === id);
+    });
+  }
+
+  async function pollStatus() {
+    try {
+      const resp = await fetch('api/status');
+      const data = await resp.json();
+      const s = data.summary || {};
+      const sast = data.sast || {};
+
+      const dot = document.getElementById('statusDot');
+      const stTxt = document.getElementById('statusText');
+      if (s.running) {
+        dot.className = 'dot live';
+        stTxt.textContent = `FUZZING (${s.execs_per_sec || 0}/s)`;
+      } else {
+        dot.className = 'dot';
+        stTxt.textContent = s.iterations > 0 ? 'CAMPAIGN COMPLETE' : 'IDLE — READY';
+      }
+
+      const pct = s.max_iterations > 0 ? Math.min(100, (s.iterations / s.max_iterations) * 100) : 0;
+      document.getElementById('progFill').style.width = `${pct.toFixed(1)}%`;
+
+      document.getElementById('kpiIter').textContent = Number(s.iterations || 0).toLocaleString();
+      document.getElementById('kpiRate').textContent = `${Number(s.execs_per_sec || 0).toFixed(1)} exec/s • ${s.forkserver_active ? 'Forkserver ON' : 'Spawn mode'}`;
+      document.getElementById('kpiEdges').textContent = Number(s.total_edges || 0).toLocaleString();
+      document.getElementById('kpiDensity').textContent = `mode: ${s.input_mode || 'stdin'} • ${s.workers || 1} worker(s)`;
+      document.getElementById('kpiCorpus').textContent = Number(s.corpus_size || 0).toLocaleString();
+      document.getElementById('kpiFavored').textContent = `${s.favored_seeds || 0} favored • depth ${s.max_depth || 0}`;
+      document.getElementById('kpiSast').textContent = Number(sast.total_findings || 0);
+      document.getElementById('kpiChecksum').textContent = `checksum: ${s.checksum_mode || 'auto'} • CmpLog: ${s.cmp_tokens_discovered || 0}`;
+
+      const totalUnique = Number(s.saved_crashes_count || 0) + Number(s.saved_divergences_count || 0);
+      document.getElementById('kpiCrashes').textContent = totalUnique;
+      document.getElementById('kpiRawCrashes').textContent = `${s.raw_crashes || 0} raw hits (stack-hash deduped)`;
+      document.getElementById('targetModeHint').textContent = `${(s.target || '').split('/').pop()} (${s.input_mode || 'stdin'})`;
+
+      // Heatmap
+      const hm = s.heatmap || [];
+      const maxHm = Math.max(1, ...hm);
+      const cells = hmEl.children;
+      for (let i = 0; i < 64; i++) {
+        const v = hm[i] || 0;
+        cells[i].title = `Sector ${i}: ${v} edges`;
+        cells[i].style.background = v > 0 ? `rgba(34, 211, 238, ${(0.25 + 0.75 * (v / maxHm)).toFixed(2)})` : '#152136';
+      }
+
+      // Sparkline
+      const tl = s.timeline || [];
+      const line = document.getElementById('covLine');
+      if (tl.length >= 2) {
+        const maxE = Math.max(1, ...tl.map(p => p.edges || 0));
+        const pts = tl.map((p, idx) => {
+          const x = (idx / (tl.length - 1)) * 584 + 8;
+          const y = 98 - ((p.edges || 0) / maxE) * 84;
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        }).join(' ');
+        line.setAttribute('points', pts);
+      }
+
+      // Capabilities
+      const caps = s.sandbox_caps || {};
+      const binfo = s.binary_info || {};
+      const chipDefs = [
+        ['Forkserver', !!s.forkserver_active || !!binfo.uses_forkserver],
+        ['C++17 Mutator', !!s.native_mutator],
+        ['SanCov + CmpLog', !!binfo.uses_sancov],
+        ['ASan', !!binfo.uses_asan],
+        ['UBSan', !!binfo.uses_ubsan],
+        ['Namespaces', !!caps.user_namespaces],
+        ['seccomp-bpf', !!caps.seccomp_bpf],
+      ];
+      document.getElementById('capsWrap').innerHTML = chipDefs
+        .map(([lbl, on]) => `<span class="chip ${on ? 'on' : 'off'}">${on ? '✓' : '○'} ${esc(lbl)}</span>`)
+        .join('');
+
+      // MOpt PSO Weights + Executions
+      const pso = s.pso_weights || {};
+      const st = s.strategy_stats || {};
+      const psoKeys = Object.keys(pso);
+      document.getElementById('psoWrap').innerHTML = psoKeys.length
+        ? psoKeys.map(k => {
+            const pctW = ((pso[k] || 0) * 100).toFixed(1);
+            const cnt = st[k] || 0;
+            return `
+              <div class="strat-row">
+                <span class="strat-name">${esc(k)}</span>
+                <div class="strat-bar-bg"><div class="strat-bar" style="width:${Math.min(100, pctW * 2.2)}%"></div></div>
+                <span class="strat-cnt">${pctW}% (${cnt})</span>
+              </div>
+            `;
+          }).join('')
+        : '<div class="empty" style="padding:8px 0;">MOpt PSO swarm weights initialize on campaign start</div>';
+
+      // Crashes & Differential findings
+      latestCrashes = data.crashes || [];
+      latestDivs = data.divergences || [];
+      const cWrap = document.getElementById('crashTableWrap');
+      if (!latestCrashes.length && !latestDivs.length) {
+        cWrap.innerHTML = '<div class="empty">No findings yet. Click "▶ Launch Campaign" above!</div>';
+      } else {
+        if (!selectedCrashId) {
+          selectedCrashId = (latestCrashes[0] && latestCrashes[0].crash_id) || (latestDivs[0] && latestDivs[0].diff_id);
+        }
+        const rows = [
+          ...latestCrashes.map(c => {
+            const tr = c.triage || {};
+            const sz = c.min_size != null ? `${c.raw_size}B → <b>${c.min_size}B</b>` : `${c.raw_size || 0}B`;
+            const active = c.crash_id === selectedCrashId ? 'active' : '';
+            return `<tr class="crash-row ${active}" data-cid="${esc(c.crash_id)}" onclick="selectFinding('${esc(c.crash_id)}')">
+              <td><code>${esc(c.crash_id)}</code></td>
+              <td><span class="badge b-${esc(tr.risk_key || 'UNKNOWN')}">${esc(tr.risk_key || 'UNK')}</span></td>
+              <td>${esc(tr.bug_class || 'crash')}<br><small style="color:var(--muted)">${esc(tr.cwe || '')}</small></td>
+              <td>${sz}</td>
+              <td><code>${esc(tr.stack_hash || 'none')}</code></td>
+            </tr>`;
+          }),
+          ...latestDivs.map(d => {
+            const active = d.diff_id === selectedCrashId ? 'active' : '';
+            return `<tr class="crash-row ${active}" data-cid="${esc(d.diff_id)}" onclick="selectFinding('${esc(d.diff_id)}')">
+              <td><code>${esc(d.diff_id)}</code></td>
+              <td><span class="badge b-HIGH">DIFF</span></td>
+              <td>${esc(d.category)}<br><small style="color:var(--muted)">${esc(d.cwe)} (${esc(d.ref_stdout)} ≠ ${esc(d.cand_stdout)})</small></td>
+              <td><b>${d.minimized_size}B</b></td>
+              <td><code>logic</code></td>
+            </tr>`;
+          })
+        ];
+        cWrap.innerHTML = `
+          <table>
+            <thead><tr><th>Finding ID</th><th>Risk</th><th>Bug / CWE</th><th>Size</th><th>Signature</th></tr></thead>
+            <tbody>${rows.join('')}</tbody>
+          </table>
+        `;
+        const curObj = latestCrashes.find(c => c.crash_id === selectedCrashId) || latestDivs.find(d => d.diff_id === selectedCrashId);
+        if (curObj) renderForensics(curObj);
+      }
+
+      // Corpus
+      const corpus = data.corpus || [];
+      document.getElementById('corpusTableWrap').innerHTML = corpus.length
+        ? `<table>
+            <thead><tr><th>Seed</th><th>Edges</th><th>Depth</th><th>Size</th><th>Sample Hex</th></tr></thead>
+            <tbody>${corpus.slice(0, 6).map(e => `
+              <tr>
+                <td>${e.favored ? '★ ' : ''}<code>${esc(e.seed_id.slice(0, 18))}</code></td>
+                <td>${e.edges}</td>
+                <td>${e.depth}</td>
+                <td>${e.size}B</td>
+                <td><code>${esc(e.preview_hex.slice(0, 20))}</code></td>
+              </tr>`).join('')}</tbody>
+          </table>`
+        : '<div class="empty" style="padding:8px 0;">Corpus seeds populate during active fuzzing.</div>';
+
+      // SAST table
+      const sf = sast.findings || [];
+      document.getElementById('sastSummaryHint').textContent = `${sast.files_scanned || 0} C/C++ files scanned • ${sf.length} hotspots (${sast.high_count || 0} HIGH)`;
+      document.getElementById('sastTableWrap').innerHTML = sf.length
+        ? `<table>
+            <thead><tr><th>Severity</th><th>CWE</th><th>Location</th><th>Vulnerability Sink</th><th>Defensive Remediation</th></tr></thead>
+            <tbody>${sf.slice(0, 12).map(f => {
+              const shortP = String(f.file_path || '').split('/').slice(-2).join('/');
+              return `<tr>
+                <td><span class="badge b-${esc(f.severity)}">${esc(f.severity)}</span></td>
+                <td><code>${esc(f.cwe)}</code></td>
+                <td><code>${esc(shortP)}:${f.line}</code></td>
+                <td>${esc(f.title)}<br><code style="color:#94a3b8;">${esc(f.code_snippet.slice(0, 65))}</code></td>
+                <td style="color:var(--muted);">${esc(f.remediation)}</td>
+              </tr>`;
+            }).join('')}</tbody>
+          </table>`
+        : '<div class="empty">No SAST findings.</div>';
+    } catch (err) {
+      console.error('Poll error:', err);
+    }
+  }
+
+  pollStatus();
+  setInterval(pollStatus, 800);
+</script>
+</body>
+</html>
