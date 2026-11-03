@@ -1,0 +1,24 @@
+target: "./targets/vulnerable_net/vuln_net"
+input_mode: "network"
+seed_dir: "seeds"
+output_dir: "crashes"
+reports_dir: "reports"
+dict_path: "configs/dictionaries/common.dict"
+timeout: 1.5
+max_iterations: 2000
+workers: 1
+sandbox: true
+enable_namespaces: true
+enable_seccomp: true
+memory_mb: 256
+monitor_logs: false
+enable_triage: true
+enable_coverage: true
+auto_minimize: true
+generate_report: true
+network_host: "127.0.0.1"
+network_port: 0
+network_protocol: "tcp"
+network_framing: "raw"
+managed_server: true
+server_args: "--port {port}"
